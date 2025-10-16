@@ -34,38 +34,120 @@ return_dict = evolve(
 
 # Installation
 
-### 1. Create a virtual environment
+>## Note
+>This guide was modified specifically for the installation on the HPC in NEU Cosmology Group, which use **Centos 7**.
+
+## 0.  Prepare `conda` tool
+- Do not use `module load` to load `conda` in the HPC, as it may cause conflicts with other packages.
+
+- [Miniconda](https://www.anaconda.com/docs/getting-started/miniconda/install#linux-terminal-installer) is recommended to be installed.
+- Conda init is recommended after installation.
+Otherwise, you need to manually activate conda through:
+    ```bash
+    source miniconda3/bin/activate
+    ```
+
+## 1. Create a virtual environment
 - We recommend creating a new environment for `DM21cm` and its dependencies. To do so via `conda`, run
+    ```bash
+    conda create -n dm21cm python=3.12 pip
+    ```
+- Activate the environment
+    ```bash
+    conda activate dm21cm
+    ```
+
+## 2. Install the modified 21cmFAST
+### 2.0. Clone the `21cmFAST` fork
+- Clone the `21cmFAST` fork [from here](https://github.com/dyliu0312/21cmFAST_v3.2.0) 
+
+Note: Compared to the [original fork](https://github.com/joshwfoster/21cmFAST), I specified some lower but compatiable versions of matplotlib, to avoid attribution error of `plt.register_cmap` (since it's removed in version > 3.8). You may also try to clone the original fork and specify the versions of matplotlib manually.
+
+### 2.1. Configure environment
+Load the required modules (`gcc`, `gsl`, `fftw`, `openmpi`).
 ```bash
-conda create -n dm21cm python=3.12 pip
+module load gcc/9.5.0 gsl/2.6 fftw/3.3.10-mpi openmpi/3.1.6
+```
+#### GCC compiler
+- Make sure `gcc` is available through the environment variable `CC`. This can be set via `export CC=/path/to/gcc/binary` in your `~/.bashrc` file, for example.
+
+Set `CC` through:
+```bash
+export CC=/home/opt/gcc-9.5.0/bin/gcc
+```
+#### GSL
+- Make sure the GNU Scientific Library (GSL) is avaiable. Set the environment variable `GSL_LIB` to the directory of the library.
+
+Set `GSL_LIB` through:
+```bash
+export GSL_LIB=/home/opt/gsl-2.6/lib/
+```
+#### FFTW
+- Make sure `fftw` is available. Set the environment variable `FFTW_INC` to the directory containing FFTW headers.
+
+It requires `lfftw3f_omp` and `lfftw3f`, which are actually named `libfftw3f_omp.so` and `libfftw3f.so` in fftw lib (version: 3.3.10).
+So we need to create symbolic links to them.
+
+To avoid root permission issues, it's recommanded to create a new directory `fftw_lib` in the user directory, and copy the libraries to it.
+```sh
+mkdir fftw_lib
+cp /home/opt/fftw-3.3.10-openmpi-3.1.6-gcc-9.5.0/lib/lib* fftw_lib/
+ln -s libfftw3f_omp.so lfftw3f_omp
+ln -s libfftw3f.so lfftw3f
+```
+Specify the `LIBRARY_PATH` to the directory containing the libraries.
+```bash
+export LIBRARY_PATH=/home/dyliu/Package/fftw_lib:$LIBRARY_PATH
 ```
 
-### 2. Install the modified 21cmFAST
-- Clone the `21cmFAST` fork [here](https://github.com/joshwfoster/21cmFAST). Checkout branch `master`.
-- Make sure `gcc` is available through the environment variable `CC`. This can be set via `export CC=/path/to/gcc/binary` in your `~/.bashrc` file, for example.
-- Make sure the GNU Scientific Library (GSL) is avaiable. Set the environment variable `GSL_LIB` to the directory of the library.
-- Make sure `fftw` is available. Set the environment variable `FFTW_INC` to the directory containing FFTW headers.
+### 2.2. Pre-install dependencies
+```bash
+conda install h5py hdf5 -c conda-forge
+```
+```bash
+conda install scipy click pyyaml cffi astropy
+```
+
+### 2.3. Install 21cmFAST
+- Set `SETUPTOOLS_SCM_PRETEND_VERSION` to 3.2.0 (seems arised from the missing git version tracking)
+```bash
+export SETUPTOOLS_SCM_PRETEND_VERSION=3.2.0
+```
+
 - Install `21cmFAST` from the project directory
 ```bash
-pip install .
+pip install --user . 
 ```
 - Set the environment variable `P21C_CACHE_DIR` to a directory to store cache files.
 
-### 3. Install DM21cm and DarkHistory
+## 3. Install DM21cm and DarkHistory
 
 - For GPU acceleration, install `jax>=0.4.14` according to your hardware specifications. See [JAX's repository](https://github.com/jax-ml/jax) for a guide. CPU-only installs can skip this step.
 - Install `DM21cm` and associated packages (including `DarkHistory`) by
 ```bash
-pip install dm21cm
+pip install dm21cm --user
+```
+- Install `dill` to enable pickle support
+```bash
+pip install dill --user
 ```
 - Download the data files required to run `DarkHistory` [here](https://zenodo.org/records/13931543), and set the environment variable `DH_DATA_DIR` to the directory containing `binning.h5`.
 - Download the data files required to run `DM21cm` [here](https://zenodo.org/records/10397814), and set the environment variable `DM21CM_DATA_DIR` to the directory containing `abscissas.h5`.
 - `DM21cm` should be available to run! You can test it with the example code above, or notebooks in [examples](examples/).
 
-### 4. Additional data tables for $p$-wave annihilating DM and PBH
+## 4. Additional data tables for $p$-wave annihilating DM and PBH
 - To run with $p$-wave annihilating DM or PBH Hawking radiation injection, download the additional data files [here](https://zenodo.org/records/17228967).
 - To run PBH accretion injection, clone this repo and run [build_pbhacc_tables.py](src/dm21cm/precompute/scripts/build_pbhacc_tables.py) to build the required data tables. See also [this example](examples/3_custom_pbh_accretion.ipynb).
 
+## 5. Additional installation for jupyter-notebook user
+- Install `ipykernal`
+```bash
+pip install ipykernel --user
+```
+- Add the kernel to jupyter
+```bash
+python -m ipykernel install --user --name dm21cm --display-name "Python312_DM21cm"
+```
 
 # Defining your custom injection
 
